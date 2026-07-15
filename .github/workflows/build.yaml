@@ -37,5 +37,5 @@ jobs:
           git config --global user.email "github-actions-bot@earl006.github.io"
           git config --global user.name "Earl006/GitHub-Actions-Bot"
           git commit -m "Updated README" -a || echo "No changes to commit"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git remote set-url origin https://${{ secrets.ACCESS_TOKEN }}@github.com/${{ github.repository }}
           git push
