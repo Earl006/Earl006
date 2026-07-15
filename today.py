@@ -44,10 +44,16 @@ def simple_request(func_name, query, variables, retries=3):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+    try:
+        request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+    except Exception:
+        if retries > 0:
+            time.sleep(2 ** (3 - retries))
+            return simple_request(func_name, query, variables, retries - 1)
+        raise Exception(func_name, ' connection failed', QUERY_COUNT)
     if request.status_code == 200:
         return request
-    if request.status_code == 502 and retries > 0:
+    if request.status_code in (502, 503, 504, 403) and retries > 0:
         time.sleep(2 ** (3 - retries))
         return simple_request(func_name, query, variables, retries - 1)
     raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
@@ -147,10 +153,25 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
         }
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
+    try:
+        request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
+    except Exception:
+        if retries > 0:
+            time.sleep(2 ** (5 - retries))
+            return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, cursor, retries - 1)
+        force_close_file(data, cache_comment)
+        raise Exception('recursive_loc() connection failed', QUERY_COUNT)
     if request.status_code == 200:
-        if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
-            return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
+        try:
+            data_json = request.json()
+        except Exception:
+            if retries > 0:
+                time.sleep(2 ** (5 - retries))
+                return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, cursor, retries - 1)
+            force_close_file(data, cache_comment)
+            raise Exception('recursive_loc() JSON decode failed', request.status_code, request.text, QUERY_COUNT)
+        if data_json['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
+            return loc_counter_one_repo(owner, repo_name, data, cache_comment, data_json['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
         else: return 0
     if request.status_code in (502, 503, 504, 403) and retries > 0:
         delay = 2 ** (5 - retries)
@@ -286,8 +307,11 @@ def add_archive():
     Several repositories I have contributed to have since been deleted.
     This function adds them using their last known data
     """
-    with open('cache/repository_archive.txt', 'r') as f:
-        data = f.readlines()
+    try:
+        with open('cache/repository_archive.txt', 'r') as f:
+            data = f.readlines()
+    except FileNotFoundError:
+        return [0, 0, 0, 0, 0]
     old_data = data
     data = data[7:len(data)-3] # remove the comment block    
     added_loc, deleted_loc, added_commits = 0, 0, 0
