@@ -40,13 +40,16 @@ def format_plural(unit):
     return 's' if unit != 1 else ''
 
 
-def simple_request(func_name, query, variables):
+def simple_request(func_name, query, variables, retries=3):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
     if request.status_code == 200:
         return request
+    if request.status_code == 502 and retries > 0:
+        time.sleep(2 ** (3 - retries))
+        return simple_request(func_name, query, variables, retries - 1)
     raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
 
 
