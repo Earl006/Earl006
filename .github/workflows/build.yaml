@@ -34,7 +34,8 @@ jobs:
         run: |-
           git add .
           git diff
-          git config --global user.email "github-actions-bot@andrew6rant.github.io"
-          git config --global user.name "Andrew6rant/GitHub-Actions-Bot"
+          git config --global user.email "github-actions-bot@earl006.github.io"
+          git config --global user.name "Earl006/GitHub-Actions-Bot"
           git commit -m "Updated README" -a || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git push
